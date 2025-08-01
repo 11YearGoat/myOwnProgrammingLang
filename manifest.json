@@ -1,0 +1,21 @@
+{
+  "name": "DeepSeek EBC IDE",
+  "short_name": "EBC IDE",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#0d1117",
+  "theme_color": "#161b22",
+  "description": "Installable English But Code IDE by Adi.",
+  "icons": [
+    {
+      "src": "favicon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "favicon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
