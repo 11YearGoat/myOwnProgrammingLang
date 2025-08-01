@@ -3,7 +3,15 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>EBC DeepSeek Launcher</title>
+  <title>EBC Engine – DeepSeek IDE</title>
+
+  <!-- PWA setup -->
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="favicon.png" />
+  <meta name="theme-color" content="#0d1117" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+
   <style>
     body {
       margin: 0;
@@ -25,21 +33,18 @@
       width: 100%;
       border: none;
     }
-    .loading {
-      text-align: center;
-      padding: 2rem;
-      font-size: 1.2rem;
-      color: #8b949e;
-    }
   </style>
 </head>
 <body>
-  <header>
-    🚀 DeepSeek EBC Engine – Made by Adi
-  </header>
+  <header>🔥 DeepSeek EBC IDE by Adi</header>
+  <iframe src="9.html"></iframe>
 
-  <div id="loading" class="loading">Loading your big fat IDE...</div>
-
-  <iframe src="9.html" onload="document.getElementById('loading').style.display='none'"></iframe>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js')
+        .then(reg => console.log("✅ Service Worker registered:", reg))
+        .catch(err => console.error("❌ SW error:", err));
+    }
+  </script>
 </body>
 </html>
