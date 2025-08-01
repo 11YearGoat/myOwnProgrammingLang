@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>EBC IDE — DeepSeek Final</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <style>
+    * { box-sizing: border-box; margin:0; padding:0 }
+    body {
+      font-family: monospace;
+      background: linear-gradient(-45deg,#00ff88,#00ffff,#002bff,#8a00ff);
+      background-size:400% 400%; animation:gradientShift 20s ease infinite;
+      color:#0f0; display:flex; flex-direction:column; height:100vh;
+    }
+    @keyframes gradientShift {
+      0%{background-position:0% 50%}
+      50%{background-position:100% 50%}
+      100%{background-position:0% 50%}
+    }
+    #top-bar {
+      display:flex; padding:8px; background:rgba(0,0,0,0.7);
+      border-bottom:2px solid lime; backdrop-filter:blur(10px);
+    }
+    button {
+      background:transparent; border:2px solid #0ff; color:#0ff;
+      padding:8px 12px; margin-right:8px; font-weight:bold;
+      cursor:pointer; transition:.2s; text-shadow:0 0 4px #0ff;
+    }
+    button:hover { background:#0ff; color:black; text-shadow:none }
+    #editor {
+      height:33vh; background:rgba(0,0,0,0.8); color:#0f0;
+      padding:12px; font-size:16px; border:none; resize:none;
+      outline:none; border-top:2px solid #0f0; border-bottom:2px solid #0f0;
+      text-shadow:0 0 3px #0f0;
+    }
+    #output {
+      flex:1; background:rgba(0,0,0,0.85); color:#0f0;
+      padding:12px; overflow-y:auto; white-space:pre-wrap;
+      text-shadow:0 0 3px lime; font-size:15px;
+    }
+    #input-box {
+      display:none; background:black; padding:10px;
+      border-top:2px solid lime;
+    }
+    #user-input {
+      width:100%; padding:8px; font-size:16px;
+      background:black; color:lime; border:2px solid lime;
+    }
+    ::selection { background:#0f0; color:black }
+  </style>
+</head>
+<body>
+
+  <div id="top-bar">
+    <button onclick="runCode()">⚡ RUN</button>
+    <button onclick="exportCode()">💾 EXPORT</button>
+    <button onclick="importCode()">📂 IMPORT</button>
+    <button onclick="insertBlock()">➕ ... BLOCK</button>
+    <input type="file" id="fileInput" style="display:none"/>
+  </div>
+
+  <textarea id="editor">// Write your EBC code here. Use // for comments.</textarea>
+  <div id="input-box"><input id="user-input" type="text" placeholder=""/></div>
+  <div id="output">🔰 Output will appear here...</div>
+
+  <script>
+    const editor     = document.getElementById("editor"),
+          output     = document.getElementById("output"),
+          inputBox   = document.getElementById("input-box"),
+          inputField = document.getElementById("user-input"),
+          fileInput  = document.getElementById("fileInput");
+
+    let vars = {}, lines = [], idx = 0, lastCond = false;
+
+    function print(msg) { output.innerText += msg + "\n"; }
+    function clearOutput() { output.innerText = ""; }
+
+    // Evaluate expressions & random[]
+    function parseExpr(expr) {
+      expr = expr.trim();
+      for (let k in vars) expr = expr.split("@" + k).join(vars[k]);
+      if (expr.startsWith("random[") && expr.endsWith("]")) {
+        const inside = expr.slice(7, -1);
+        if (inside.includes("to")) {
+          let [lo,hi] = inside.split("to").map(n=>parseInt(n));
+          return Math.floor(Math.random()*(hi-lo+1))+lo;
+        } else {
+          let items = inside.replace(/['"]/g,"").split(",").map(s=>s.trim());
+          return items[Math.floor(Math.random()*items.length)];
+        }
+      }
+      try { return eval(expr); }
+      catch { return expr.replace(/['"]/g,""); }
+    }
+
+    // Check conditions: if, if not, or
+    function checkCondition(line) {
+      line = line.trim();
+      let m;
+      // if not @x ...  (negate condition)
+      if (line.startsWith("not ")) {
+        return !checkCondition(line.slice(4));
+      }
+      // @x not @y
+      if (m = line.match(/@(\w+)\s+not\s+@(\w+)/)) {
+        return vars[m[1]] != vars[m[2]];
+      }
+      // @x is @y
+      if (m = line.match(/@(\w+)\s+is\s+@(\w+)/)) {
+        return vars[m[1]] == vars[m[2]];
+      }
+      // is above [n]
+      if (m = line.match(/@(\w+).*above\s+\[(\d+)\]/)) {
+        return vars[m[1]] > +m[2];
+      }
+      // is below [n]
+      if (m = line.match(/@(\w+).*below\s+\[(\d+)\]/)) {
+        return vars[m[1]] < +m[2];
+      }
+      // between[x to y]
+      if (m = line.match(/(\w+).*between\[(\d+)\s+to\s+(\d+)\]/)) {
+        return vars[m[1]] >= +m[2] && vars[m[1]] <= +m[3];
+      }
+      // = n
+      if (m = line.match(/@?(\w+)\s*=\s*(\d+)/)) {
+        return vars[m[1]] == +m[2];
+      }
+      return false;
+    }
+
+    // Prompt user with HTML input
+    function waitForInput(promptText, isNum) {
+      return new Promise(res => {
+        inputBox.style.display = "block";
+        inputField.value = "";
+        inputField.placeholder = promptText;
+        inputField.focus();
+        inputField.onkeydown = e => {
+          if (e.key === "Enter") {
+            inputBox.style.display = "none";
+            res(isNum ? +inputField.value : inputField.value);
+          }
+        };
+      });
+    }
+
+    // Main interpreter loop
+    async function runLine() {
+      while (idx < lines.length) {
+        let raw = lines[idx++],
+            line = raw.split("//")[0].trim();
+        if (!line) continue;
+
+        // ... block wrapper
+        if (line === "...") {
+          let block = [];
+          while (idx < lines.length && lines[idx].split("//")[0].trim() !== "...") {
+            block.push(lines[idx++]);
+          }
+          idx++; // skip closing ...
+          // re-inject
+          for (let b of block) lines.splice(idx++, 0, b);
+          continue;
+        }
+
+        // ask=input
+        if (line.includes("ask=")) {
+          let [left,rest] = line.split("ask=");
+          let varName = left.replace("=","").trim(),
+              [type,prompt] = rest.split("=").map(s=>s.trim());
+          prompt = prompt.replace(/^['"]|['"]$/g,"");
+          vars[varName] = await waitForInput(prompt, type==="num");
+        }
+        // show statement
+        else if (line.startsWith("show")) {
+          let txt = line.slice(4).trim();
+          // replace all @vars
+          for (let k in vars) txt = txt.split("@" + k).join(vars[k]);
+          // strip quotes
+          txt = txt.replace(/^['"]|['"]$/g,"");
+          print(txt);
+        }
+        // if <cond>
+        else if (line.startsWith("if ")) {
+          let cond = checkCondition(line.slice(3));
+          lastCond = cond;
+          if (!cond) {
+            while (idx < lines.length && !lines[idx].trim().startsWith("or")) idx++;
+          }
+        }
+        // or <cond> or else
+        else if (line.startsWith("or")) {
+          let rest = line.slice(2).trim();
+          let cond = rest === "" ? !lastCond : checkCondition(rest);
+          lastCond = cond;
+          if (!cond) {
+            while (idx < lines.length && !lines[idx].trim().startsWith("or")) idx++;
+          }
+        }
+        // assignment
+        else if (line.includes("=")) {
+          let [k,v] = line.split("=").map(s=>s.trim());
+          vars[k] = parseExpr(v);
+        }
+      }
+    }
+
+    // Button APIs
+    async function runCode() {
+      clearOutput();
+      vars = {}; lines = editor.value.split("\n");
+      idx = 0; lastCond = false;
+      await runLine();
+    }
+    function exportCode() {
+      let b = new Blob([editor.value],{type:"text/plain"}),
+          u = URL.createObjectURL(b),
+          a = document.createElement("a");
+      a.href = u; a.download = "code.ebc"; a.click();
+    }
+    function importCode() {
+      fileInput.click();
+    }
+    function insertBlock() {
+      let t = editor.value, s = editor.selectionStart,
+          ins = "...\n\n...\n";
+      editor.value = t.slice(0,s) + ins + t.slice(s);
+      editor.focus();
+      editor.selectionStart = editor.selectionEnd = s+4;
+    }
+    fileInput.onchange = e => {
+      let f = e.target.files[0];
+      if (!f) return;
+      let r = new FileReader();
+      r.onload = evt => editor.value = evt.target.result;
+      r.readAsText(f);
+    };
+  </script>
+</body>
+</html>
