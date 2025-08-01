@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EBC DeepSeek Launcher</title>
+  <style>
+    body {
+      margin: 0;
+      background: #0d1117;
+      color: white;
+      font-family: Consolas, monospace;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    header {
+      padding: 1rem;
+      font-size: 1.2rem;
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+    }
+    iframe {
+      flex: 1;
+      width: 100%;
+      border: none;
+    }
+    .loading {
+      text-align: center;
+      padding: 2rem;
+      font-size: 1.2rem;
+      color: #8b949e;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    🚀 DeepSeek EBC Engine – Made by Adi
+  </header>
+
+  <div id="loading" class="loading">Loading your big fat IDE...</div>
+
+  <iframe src="9.html" onload="document.getElementById('loading').style.display='none'"></iframe>
+</body>
+</html>
